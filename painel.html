@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="light">
+  <meta name="theme-color" content="#0F0F0F">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Painel da coordenação – APPDF</title>
+  <link rel="icon" type="image/png" href="imagens/distintivo-policia-penal.png">
+  <link rel="preconnect" href="https://script.google.com" crossorigin>
+  <link rel="preconnect" href="https://script.googleusercontent.com" crossorigin>
+  <link rel="stylesheet" href="estilos.css">
+  <link rel="stylesheet" href="painel.css">
+</head>
+<body class="sem-nav painel">
+  <a class="pular" href="#conteudo">Ir para o conteúdo</a>
+
+  <header class="topo-inst">
+    <div class="faixa">
+      <img class="emblema" src="imagens/brasao-df.png" alt="Brasão do Distrito Federal" width="101" height="120">
+      <div class="inst-txt">
+        <p>Governo do Distrito Federal</p>
+        <p>Secretaria de Estado de Administração Penitenciária</p>
+        <p class="inst-forte">Academia da Polícia Penal do Distrito Federal</p>
+      </div>
+      <img class="emblema" src="imagens/distintivo-policia-penal.png" alt="Distintivo da Polícia Penal do Distrito Federal" width="93" height="120">
+    </div>
+    <div class="hero" id="hero"></div>
+  </header>
+
+  <main id="conteudo" class="principal painel-principal" tabindex="-1">
+    <div id="app">
+      <noscript><div class="cartao"><p>Ative o JavaScript do navegador para usar o painel.</p></div></noscript>
+    </div>
+  </main>
+
+  <div id="aviso" class="toast" role="status" aria-live="polite" hidden></div>
+  <div id="projecao" class="projecao" hidden></div>
+
+  <footer class="rodape"><p>Painel da coordenação · APPDF · SEAPE/DF</p></footer>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script src="config.js"></script>
+  <script src="painel.js"></script>
+</body>
+</html>
