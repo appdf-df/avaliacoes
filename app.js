@@ -129,7 +129,7 @@
   // ============================== Estrutura ==============================
   function etapasAtivas() {
     if (!DEF) return [];
-    if (DEF.tipo === 'reacao') return DEF.etapas;
+    if (DEF.tipo !== '360') return DEF.etapas;   // aluno (Reação + 360°) e reação: sequência fixa
     // Some a etapa de pares do próprio instrutor e os instrutores que a coordenação já avaliou.
     var nome = S.resp.in_nome || '';
     var ramo = (DEF.ramos[S.resp.perfil] || []).filter(function (et) {
@@ -210,8 +210,8 @@
         el('span', null, el('h2', { text: titulo }), el('p', { text: texto }), el('p', { class: 'ir', text: 'Responder →' })));
     };
     app.appendChild(el('div', { class: 'escolhas' },
-      cartao(link('reacao'), ICONES.lista, 'Avaliação de Reação', 'Respondida pelos alunos sobre a ação educacional. Anônima, leva cerca de 5 minutos.'),
-      cartao(link('360'), ICONES.pessoas, 'Avaliação 360° do Corpo Docente', 'Respondida por alunos, coordenação, instrutores (autoavaliação) e colegas instrutores (pares).')));
+      cartao(link('aluno'), ICONES.lista, 'Sou aluno(a)', 'Avaliação de Reação e Avaliação 360° dos instrutores, em sequência. Obrigatória e anônima.'),
+      cartao(link('360'), ICONES.pessoas, 'Sou instrutor(a) ou da coordenação', 'Avaliação 360° do Corpo Docente: autoavaliação, colegas, turma, curso e coordenação.')));
     focarTitulo('titulo-tela');
   }
 
@@ -219,12 +219,12 @@
   function telaInicio() {
     mostrarNav(false);
     S.etapa = -1;
-    heroAcao(DEF.tipo === 'reacao' ? 'Avaliação da ação educacional' : 'Avaliação do corpo docente', DEF.titulo);
+    heroAcao(DEF.tipo === '360' ? 'Avaliação do corpo docente' : (DEF.tipo === 'aluno' ? 'Avaliação obrigatória do aluno' : 'Avaliação da ação educacional'), DEF.titulo);
     limpar(app);
     var fatos = [
       ['Tempo', DEF.tempo.replace('cerca de ', '~ ')],
-      ['Etapas', DEF.tipo === 'reacao' ? String(DEF.etapas.length) : 'Conforme o perfil'],
-      ['Alunos', 'Anônimo'],
+      ['Etapas', DEF.tipo === '360' ? 'Conforme o perfil' : String(DEF.etapas.length)],
+      [DEF.tipo === 'aluno' ? 'Respostas' : 'Alunos', DEF.tipo === 'aluno' ? 'Anônimas' : 'Anônimo'],
     ];
     app.appendChild(el('div', { class: 'cartao intro' },
       S.restaurado ? el('div', { class: 'aviso', role: 'status' },
@@ -308,7 +308,7 @@
     return el('div', { class: 'progresso', id: 'progresso' },
       el('div', { class: 'progresso-txt' },
         el('strong', { text: semTotal ? 'Etapa ' + atual : 'Etapa ' + atual + ' de ' + total }),
-        el('span', { text: DEF.titulo })),
+        el('span', { text: (etapas[S.etapa] && etapas[S.etapa].parte) || DEF.titulo })),
       el('div', {
         class: 'barra', role: 'progressbar', 'aria-label': 'Progresso da avaliação',
         'aria-valuemin': '1', 'aria-valuemax': semTotal ? null : String(total), 'aria-valuenow': String(atual),
@@ -342,6 +342,8 @@
     var pend = pendencias(etapasAtivas()[S.etapa]);
     if (pend.length) { mostrarErros(pend); return; }
     var etapas = etapasAtivas();
+    var atual = etapas[S.etapa];
+    if (atual && atual.verificar === 'matricula' && S.matriculaOk !== S.resp.matricula) { verificarMatricula(); return; }
     if (S.etapa < etapas.length - 1) { S.etapa += 1; telaEtapa(); return; }
     if (etapas.length === 1) {   // perfil sem nada pendente (ex.: coordenação já avaliou todos)
       mostrarErros([], 'A coordenação já avaliou todos os instrutores desta ação. Não há avaliações pendentes para este perfil.');
@@ -349,6 +351,30 @@
     }
     enviar();
   });
+
+  /** Confere a matrícula no servidor antes de o aluno começar a responder. */
+  function verificarMatricula() {
+    S.enviando = true;
+    btnAvancar.disabled = true; btnVoltar.disabled = true;
+    limpar(btnAvancar);
+    btnAvancar.appendChild(el('span', { class: 'giro', 'aria-hidden': 'true' }));
+    btnAvancar.appendChild(document.createTextNode('Conferindo…'));
+    comTempo(fetch(CFG.API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ api: 'verificar_matricula', acao: D.acao.id, matricula: S.resp.matricula || '' }) })
+      .then(function (r) { return r.json(); }), 30000)
+      .then(function (r) {
+        S.enviando = false; atualizarNav();
+        if (r && r.ok) { S.matriculaOk = S.resp.matricula; S.etapa += 1; telaEtapa(); return; }
+        if (r && r.codigo === 'encerrada') { telaEncerrada(); return; }
+        if (r && r.codigo === 'ja_respondeu') { armaz.apagar(); }
+        mostrarErros([{ id: 'matricula', mensagem: (r && r.erros && r.erros[0] && r.erros[0].mensagem) || 'Matrícula não aceita.' }],
+          (r && r.mensagem) || 'Não foi possível conferir a matrícula.');
+      })
+      .catch(function () {
+        S.enviando = false; atualizarNav();
+        mostrarErros([{ id: 'matricula', mensagem: 'Sem conexão.' }], 'Não foi possível conferir a matrícula. Verifique a internet e tente de novo.');
+      });
+  }
 
   function marcarTodosNA(et) {
     et.perguntas.forEach(function (q) {
@@ -368,6 +394,7 @@
       case 'checkbox': return pCheckbox(q);
       case 'nps': return pNps(q);
       case 'texto': return pTexto(q);
+      case 'matricula': return pMatricula(q);
       default: return el('div');
     }
   }
@@ -546,6 +573,19 @@
         el('span', { text: q.min + ' – ' + q.extremos[0] }), el('span', { text: q.max + ' – ' + q.extremos[1] })),
       msgErro(q.id));
   }
+  function pMatricula(q) {
+    var id = seguroId(q.id);
+    var inp = el('input', { id: 'in-' + id, type: 'text', class: 'entrada', autocomplete: 'off', autocapitalize: 'characters',
+      spellcheck: 'false', maxlength: '30', inputmode: 'text', 'aria-required': 'true', 'aria-describedby': 'err-' + id,
+      placeholder: 'Ex.: 1234567', style: 'font-size:20px;letter-spacing:.06em' });
+    inp.value = S.resp[q.id] || '';
+    inp.addEventListener('input', function () { definir(q.id, inp.value.trim()); limparErro(q.id); });
+    inp.addEventListener('keydown', function (ev) { if (ev.key === 'Enter') { ev.preventDefault(); btnAvancar.click(); } });
+    return el('div', { class: 'cartao campo', id: 'q-' + id },
+      el('label', { class: 'pergunta', for: 'in-' + id }, q.titulo, q.obrigatorio ? marcaObrig() : null),
+      inp, msgErro(q.id));
+  }
+
   function pTexto(q) {
     var id = seguroId(q.id);
     var cont = el('p', { class: 'contador', id: 'cont-' + id });
@@ -582,6 +622,9 @@
           if (q.outro && Array.isArray(r[q.id]) && r[q.id].indexOf(q.outro.valor) !== -1 && vazio(String(r[q.outro.id] || '').trim()))
             l.push({ id: q.id, mensagem: 'Descreva a opção "Outra".' });
           else if (q.obrigatorio && vazio(r[q.id])) l.push({ id: q.id, mensagem: 'Selecione ao menos uma opção.' });
+          break;
+        case 'matricula':
+          if (!/\d/.test(String(r[q.id] || ''))) l.push({ id: q.id, mensagem: 'Informe sua matrícula.' });
           break;
         case 'texto':
           if (String(r[q.id] || '').length > LIMITE) l.push({ id: q.id, mensagem: 'Use no máximo ' + mil(LIMITE) + ' caracteres.' });
@@ -667,6 +710,13 @@
   }
   function falhaEnvio(r) {
     if (r.codigo === 'encerrada') { armaz.apagar(); telaEncerrada(); return; }
+    if (r.codigo === 'ja_respondeu') { armaz.apagar(); telaMensagem('Avaliação obrigatória do aluno', 'Avaliação já concluída', r.mensagem); return; }
+    if (r.codigo === 'desatualizado') {
+      armaz.apagar();
+      telaMensagem('Avaliações da APPDF', 'Página atualizada', r.mensagem,
+        el('button', { type: 'button', class: 'btn btn-primario', text: 'Recarregar', onclick: function () { window.location.reload(); } }));
+      return;
+    }
     btnVoltar.disabled = false;
     if (r.erros && r.erros.length) {
       var etapas = etapasAtivas(), alvo = -1;
@@ -698,6 +748,10 @@
       el('h2', { text: 'Sua avaliação foi registrada' }),
       el('p', { text: D.textos.confirmacao }),
       acoes.childNodes.length ? acoes : null));
+    if (DEF.tipo === 'aluno') {
+      app.appendChild(el('div', { class: 'cartao' }, el('p', { style: 'margin:0', text:
+        'Você concluiu as duas avaliações obrigatórias desta ação: a Avaliação de Reação e a Avaliação 360° dos instrutores. Sua participação já foi registrada.' })));
+    }
     if (DEF.tipo === 'reacao') {
       app.appendChild(el('div', { class: 'cartao convite' },
         el('h2', { text: 'Avaliação 360° do Corpo Docente' }),
@@ -736,7 +790,7 @@
    */
   function carregar() {
     if (!ACAO) { D = { tela: 'sem_acao' }; iniciar(); return; }
-    var chaveCache = 'appdf:dados3:' + ACAO.toUpperCase() + ':' + FORM;
+    var chaveCache = 'appdf:dados4:' + ACAO.toUpperCase() + ':' + FORM;
     var copia = null;
     try { copia = JSON.parse(window.localStorage.getItem(chaveCache) || 'null'); } catch (e) { copia = null; }
     var usouCopia = !!(copia && copia.d && copia.d.tela && Date.now() - copia.t < 7 * 24 * 3600 * 1000);

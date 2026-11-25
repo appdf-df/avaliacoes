@@ -101,7 +101,7 @@
   }
   function links(id) {
     var b = BASE + '?acao=' + encodeURIComponent(id);
-    return { reacao: b + '&form=reacao', p360: b + '&form=360', escolha: b };
+    return { aluno: b + '&form=aluno', p360: b + '&form=360', escolha: b };
   }
 
   // ================================= API =================================
@@ -123,7 +123,7 @@
   function rotear() {
     if (!S.token) { telaEntrar(); return; }
     var h = decodeURIComponent(window.location.hash.slice(1));
-    var m = h.match(/^(editar|links|resultados)=(.+)$/);
+    var m = h.match(/^(editar|links|resultados|turma)=(.+)$/);
     if (h === 'nova') { garantirLista(function () { telaForm(null); }); return; }
     if (m) {
       garantirLista(function () {
@@ -131,6 +131,7 @@
         if (!a) { ir('lista'); return; }
         if (m[1] === 'editar') telaForm(a);
         else if (m[1] === 'links') telaLinks(a);
+        else if (m[1] === 'turma') telaTurma(a);
         else telaResultados(a);
       });
       return;
@@ -206,11 +207,13 @@
       el('h2', { text: a.nome || '(sem nome)' }),
       el('p', { class: 'acao-meta', text: [a.datas, a.local].filter(Boolean).join(' · ') }),
       el('div', { class: 'numeros' },
-        el('div', { class: 'numero' }, el('b', { text: String(r.reacao) }), el('span', { text: 'respostas na Reação' })),
+        el('div', { class: 'numero' }, el('b', { text: r.turma ? r.concluiram + '/' + r.turma : String(r.concluiram) }),
+          el('span', { text: r.turma ? 'alunos concluíram' : 'alunos concluíram (sem turma cadastrada)' })),
         el('div', { class: 'numero' }, el('b', { text: r.instrutores + '/' + porInstrutor }), el('span', { text: 'instrutores responderam' })),
         el('div', { class: 'numero' }, el('b', { text: r.coordenacao + '/' + porInstrutor }), el('span', { text: 'avaliados pela coordenação' }))),
       el('div', { class: 'acoes-card' },
         el('button', { type: 'button', class: 'btn btn-primario btn-peq', text: 'Links e QR code', onclick: function () { ir('links=' + a.id); } }),
+        el('button', { type: 'button', class: 'btn btn-secundario btn-peq', text: 'Quem falta', onclick: function () { ir('turma=' + a.id); } }),
         el('button', { type: 'button', class: 'btn btn-secundario btn-peq', text: 'Resultados', onclick: function () { ir('resultados=' + a.id); } }),
         el('button', { type: 'button', class: 'btn btn-secundario btn-peq', text: 'Editar', onclick: function () { ir('editar=' + a.id); } }),
         el('button', { type: 'button', class: 'btn btn-secundario btn-peq', text: aberta ? 'Encerrar' : 'Reabrir',
@@ -265,7 +268,7 @@
 
     var dados = editando ? JSON.parse(JSON.stringify(a)) : {
       nome: '', datas: '', local: 'Auditório da Academia da Polícia Penal', coordenacao: ultimaCoordenacao(),
-      turnos: ['Matutino', 'Vespertino', 'Ambos os turnos'], encerramento: '', disciplinas: [{ nome: '', instrutores: [] }],
+      turnos: ['Matutino', 'Vespertino', 'Ambos os turnos'], encerramento: '', disciplinas: [{ nome: '', instrutores: [] }], turmaTexto: '',
     };
     if (!dados.disciplinas.length) dados.disciplinas = [{ nome: '', instrutores: [] }];
     var sugestoesInstrutores = todosInstrutores();
@@ -337,6 +340,17 @@
     }
     desenharDisciplinas();
 
+    var turmaTa = el('textarea', { id: 'f-turma', class: 'entrada', rows: '8', spellcheck: 'false',
+      placeholder: '1234567 Nome do(a) aluno(a)\n7654321 Nome do(a) aluno(a)\n…' });
+    turmaTa.value = dados.turmaTexto || '';
+    var contTurma = el('p', { class: 'dica' });
+    var contar = function () {
+      var n = turmaTa.value.split(/\n/).filter(function (l) { return /\d/.test(l); }).length;
+      contTurma.textContent = n ? n + ' aluno(s) na lista.' : 'Sem lista: qualquer matrícula pode responder, e o painel mostra só quem concluiu.';
+    };
+    contar();
+    turmaTa.addEventListener('input', function () { dados.turmaTexto = turmaTa.value; turmaTa.classList.remove('is-invalido'); contar(); });
+
     var enc = el('input', { id: 'f-encerramento', type: 'date', class: 'entrada' });
     enc.value = dados.encerramento || '';
     enc.addEventListener('input', function () { dados.encerramento = enc.value; });
@@ -361,6 +375,11 @@
         el('h2', { class: 'grupo-titulo', style: 'margin-top:0', text: 'Disciplinas e instrutores' }),
         el('p', { class: 'dica', style: 'margin:0 0 12px', text: 'Escreva o nome de cada instrutor(a) sempre igual: é por ele que as avaliações se juntam. Uma disciplina pode ter mais de um(a) instrutor(a).' }),
         boxDisc, listaSug),
+      el('div', { class: 'cartao', id: 'c-turma' },
+        el('h2', { class: 'grupo-titulo', style: 'margin-top:0', text: 'Turma (alunos)' }),
+        el('label', { class: 'rotulo', for: 'f-turma', text: 'Cole a lista da turma: uma pessoa por linha, com matrícula e nome' }),
+        el('p', { class: 'dica', style: 'margin:0 0 8px', text: 'Pode copiar direto da lista de presença ou de uma planilha. Só quem estiver na lista consegue responder, e o painel mostra quem ainda falta.' }),
+        turmaTa, contTurma, el('p', { class: 'erro-campo', id: 'e-turma', hidden: true })),
       el('div', { class: 'cartao' },
         el('h2', { class: 'grupo-titulo', style: 'margin-top:0', text: 'Encerramento automático' }),
         el('label', { class: 'rotulo', for: 'f-encerramento', text: 'Fechar os formulários depois de (opcional)' }), enc,
@@ -380,7 +399,7 @@
       });
       salvar.disabled = true; salvar.textContent = 'Salvando…';
       api('salvar', { acao: { id: editando ? a.id : '', nome: dados.nome, datas: dados.datas, local: dados.local, coordenacao: dados.coordenacao,
-        turnos: dados.turnos, encerramento: dados.encerramento, disciplinas: dados.disciplinas } }).then(function (r) {
+        turnos: dados.turnos, encerramento: dados.encerramento, disciplinas: dados.disciplinas, turma: turmaTa.value } }).then(function (r) {
         salvar.disabled = false; salvar.textContent = editando ? 'Salvar alterações' : 'Salvar e gerar links';
         if (!r.ok) {
           erroGeral.textContent = r.mensagem; erroGeral.hidden = false;
@@ -490,17 +509,53 @@
       return c;
     };
     var msg = 'Avaliação da ação "' + a.nome + '"' + (a.datas ? ' (' + a.datas + ')' : '') + '\n\n' +
-      'Avaliação de Reação (alunos, anônima):\n' + L.reacao + '\n\n' +
-      'Avaliação 360° do Corpo Docente (alunos, instrutores e coordenação):\n' + L.p360;
+      'ALUNOS – avaliação obrigatória (Reação + 360° dos instrutores). Tenha sua matrícula em mãos:\n' + L.aluno + '\n\n' +
+      'INSTRUTORES E COORDENAÇÃO – Avaliação 360°:\n' + L.p360;
     var txt = el('textarea', { class: 'entrada', readonly: true, 'aria-label': 'Mensagem pronta' }); txt.value = msg;
     app.appendChild(el('div', { class: 'links' },
-      cartao('Avaliação de Reação', 'Para os alunos, no fim da aula. Anônima.', L.reacao, 'qr-reacao-' + a.id),
-      cartao('Avaliação 360° do Corpo Docente', 'Para alunos, instrutores e coordenação. Cada perfil avalia todos de uma vez.', L.p360, 'qr-360-' + a.id),
-      cartao('Página com os dois formulários', 'Um único link que leva às duas avaliações.', L.escolha, 'qr-avaliacoes-' + a.id),
+      cartao('Alunos – avaliação obrigatória', 'Reação e 360° dos instrutores, em sequência. O aluno informa a matrícula no início; as respostas continuam anônimas.', L.aluno, 'qr-alunos-' + a.id),
+      cartao('Instrutores e coordenação – 360°', 'Formulário único do instrutor e avaliação dos instrutores pela coordenação.', L.p360, 'qr-360-' + a.id),
+      cartao('Página com os dois links', 'Um único link: a pessoa escolhe se é aluno ou instrutor/coordenação.', L.escolha, 'qr-avaliacoes-' + a.id),
       el('div', { class: 'cartao mensagem-pronta' },
         el('h2', { class: 'grupo-titulo', style: 'margin-top:0', text: 'Mensagem pronta para o WhatsApp' }), txt,
         el('div', { class: 'barra-salvar', style: 'margin-top:10px' },
           el('button', { type: 'button', class: 'btn btn-primario btn-peq', text: 'Copiar mensagem', onclick: function () { copiar(msg, 'Mensagem'); } })))));
+  }
+
+  // ================================ Turma ================================
+  function telaTurma(a) {
+    topo('Quem falta responder', a.nome, [a.datas, a.local].filter(Boolean).join(' · '), [
+      el('button', { type: 'button', class: 'btn btn-escuro-borda btn-peq', text: 'Atualizar', onclick: function () { telaTurma(a); } }),
+      el('button', { type: 'button', class: 'btn btn-escuro-borda btn-peq', text: 'Editar turma', onclick: function () { ir('editar=' + a.id); } }),
+    ], { texto: 'Voltar às ações', acao: function () { ir('lista'); } });
+    carregando('Conferindo quem já respondeu…');
+    api('turma', { id: a.id }).then(function (r) {
+      if (!r.ok) { erroCartao(r.mensagem, function () { telaTurma(a); }); return; }
+      limpar(app);
+      var pend = r.alunos.filter(function (x) { return !x.concluiu; });
+      var feitos = r.alunos.filter(function (x) { return x.concluiu; }).concat(r.foraDaLista);
+      var pct = r.total ? Math.round(100 * (r.total - pend.length) / r.total) : 0;
+      app.appendChild(el('div', { class: 'tiles' },
+        tile(r.total ? (r.total - pend.length) + '/' + r.total : String(r.concluiram), 'alunos concluíram as duas avaliações', true),
+        tile(r.total ? String(pend.length) : '—', 'ainda faltam'),
+        tile(r.total ? pct + '%' : '—', 'da turma')));
+      if (!r.total) {
+        app.appendChild(el('div', { class: 'aviso' }, el('p', { text: 'Nenhuma turma cadastrada para esta ação. Cole a lista de alunos em "Editar turma" para ver quem falta.' })));
+      }
+      if (r.total) {
+        var txtPend = pend.map(function (x) { return (x.nome ? x.nome + ' – ' : '') + x.matricula; }).join('\n');
+        app.appendChild(secao('Faltam responder (' + pend.length + ')', pend.length ? 'Copie a lista para cobrar no grupo da turma.' : null,
+          pend.length ? el('div', null,
+            el('ul', { class: 'comentarios' }, pend.map(function (x) { return el('li', null, x.nome || '(sem nome)', el('small', { text: 'Matrícula ' + x.matricula })); })),
+            el('div', { class: 'barra-salvar', style: 'margin-top:12px' },
+              el('button', { type: 'button', class: 'btn btn-primario btn-peq', text: 'Copiar lista de pendentes', onclick: function () { copiar(txtPend, 'Lista'); } })))
+            : el('p', { class: 'nada', text: 'Todos os alunos da turma já concluíram.' })));
+      }
+      app.appendChild(secao('Já concluíram (' + feitos.length + ')', 'Só registramos que a pessoa concluiu e a data. As respostas continuam anônimas.',
+        feitos.length ? el('ul', { class: 'comentarios' }, feitos.map(function (x) {
+          return el('li', null, x.nome || ('Matrícula ' + x.matricula), el('small', { text: (x.nome ? 'Matrícula ' + x.matricula + ' · ' : '') + 'concluiu em ' + x.data + (r.total && !x.nome ? ' · fora da lista da turma' : '') }));
+        })) : el('p', { class: 'nada', text: 'Ninguém concluiu ainda.' })));
+    }).catch(function (e) { if (e.message !== 'sessao') erroCartao('Sem conexão com o servidor.', function () { telaTurma(a); }); });
   }
 
   // ============================== Resultados ==============================
