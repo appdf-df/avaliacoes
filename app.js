@@ -130,7 +130,12 @@
   function etapasAtivas() {
     if (!DEF) return [];
     if (DEF.tipo === 'reacao') return DEF.etapas;
-    return [DEF.etapaPerfil].concat(DEF.ramos[S.resp.perfil] || []);
+    // Some a etapa de pares do próprio instrutor e os instrutores que a coordenação já avaliou.
+    var nome = S.resp.in_nome || '';
+    var ramo = (DEF.ramos[S.resp.perfil] || []).filter(function (et) {
+      return !et.jaAvaliado && !(et.paraColega && et.paraColega === nome);
+    });
+    return [DEF.etapaPerfil].concat(ramo);
   }
   function idsDaPergunta(q) {
     if (q.tipo === 'likert') return q.itens.map(function (it) { return it.id; });
@@ -267,17 +272,20 @@
       cab = { nome: nome, detalhe: det ? 'Disciplina(s): ' + det : '' };
     }
     if (cab) {
+      // "Instrutor(a) 2 de 3": posição entre as etapas do mesmo tipo
+      var mesmas = etapas.filter(function (e) { return e.cabecalho && e.cabecalho.rotulo === cab.rotulo; });
+      var rotulo = (cab.rotulo || 'Instrutor(a) avaliado(a)') + (et.cabecalho && mesmas.length > 1 ? ' ' + (mesmas.indexOf(et) + 1) + ' de ' + mesmas.length : '');
       app.appendChild(el('div', { class: 'instrutor' },
         el('span', { class: 'avatar', 'aria-hidden': 'true', text: iniciais(cab.nome) }),
         el('div', null,
-          el('p', { class: 'instrutor-rotulo', text: 'Instrutor(a) avaliado(a)' }),
+          el('p', { class: 'instrutor-rotulo', text: rotulo }),
           el('p', { class: 'instrutor-nome', text: cab.nome }),
           cab.detalhe ? el('p', { class: 'instrutor-detalhe', text: cab.detalhe }) : null)));
     }
     if (et.marcarNA) {
       app.appendChild(el('button', {
         type: 'button', class: 'btn-link',
-        text: 'Não assisti a esta aula: marcar todos como "Não se aplica / não observei"',
+        text: et.textoNA || 'Não assisti a esta aula: marcar todos como "Não se aplica / não observei"',
         onclick: function () { marcarTodosNA(et); },
       }));
     }
@@ -314,7 +322,7 @@
   }
   function atualizarNav() {
     var etapas = etapasAtivas();
-    var ultima = S.etapa === etapas.length - 1 && !(DEF.tipo === '360' && !S.resp.perfil);
+    var ultima = S.etapa === etapas.length - 1 && etapas.length > 1 && !(DEF.tipo === '360' && !S.resp.perfil);
     limpar(btnAvancar);
     btnAvancar.appendChild(document.createTextNode(ultima ? 'Enviar avaliação' : 'Avançar'));
     if (!ultima) btnAvancar.appendChild(svg(ICONES.seta, { cor: '#DDBE78', tamanho: 18, classe: 'seta' }));
@@ -335,6 +343,10 @@
     if (pend.length) { mostrarErros(pend); return; }
     var etapas = etapasAtivas();
     if (S.etapa < etapas.length - 1) { S.etapa += 1; telaEtapa(); return; }
+    if (etapas.length === 1) {   // perfil sem nada pendente (ex.: coordenação já avaliou todos)
+      mostrarErros([], 'A coordenação já avaliou todos os instrutores desta ação. Não há avaliações pendentes para este perfil.');
+      return;
+    }
     enviar();
   });
 
@@ -376,7 +388,10 @@
     });
     sel._q = q;
     preencherSelect(sel, q);
-    sel.addEventListener('change', function () { definir(q.id, sel.value); limparErro(q.id); atualizarDependentes(q.id); });
+    sel.addEventListener('change', function () {
+      definir(q.id, sel.value); limparErro(q.id); atualizarDependentes(q.id);
+      if (q.id === 'in_nome') atualizarProgresso();   // o número de colegas a avaliar muda
+    });
     return el('div', { class: 'cartao campo', id: 'q-' + id },
       el('label', { class: 'pergunta', for: 'in-' + id }, q.titulo, q.obrigatorio ? marcaObrig() : null),
       q.ajuda ? el('p', { class: 'pergunta-ajuda', text: q.ajuda }) : null,
@@ -678,15 +693,6 @@
     heroAcao(DEF.titulo, 'Obrigado pela sua participação');
     limpar(app);
     var acoes = el('div', { class: 'acoes' });
-    if (DEF.tipo === '360' && S.resp.perfil === 'coordenacao') {
-      var q = DEF.ramos.coordenacao[0].perguntas[0];
-      var restantes = q.opcoes.filter(function (o) { return !opcaoDesabilitada(q, o); });
-      if (restantes.length) acoes.appendChild(el('button', { type: 'button', class: 'btn btn-primario', text: 'Avaliar outro instrutor', onclick: function () { novaRodada('co', 1); } }));
-      else acoes.appendChild(el('p', { text: 'Todos os instrutores desta ação já foram avaliados pela coordenação.' }));
-    }
-    if (DEF.tipo === '360' && S.resp.perfil === 'pares') {
-      acoes.appendChild(el('button', { type: 'button', class: 'btn btn-primario', text: 'Avaliar outro(a) colega', onclick: function () { novaRodada('pa', 1, ['pa_nome']); } }));
-    }
     app.appendChild(el('div', { class: 'cartao final' },
       el('div', { class: 'selo' }, svg(ICONES.check, { cor: '#0F0F0F' })),
       el('h2', { text: 'Sua avaliação foi registrada' }),
@@ -700,14 +706,6 @@
     }
     focarTitulo('titulo-tela');
   }
-  function novaRodada(prefixo, etapa, manter) {
-    manter = manter || [];
-    Object.keys(S.resp).forEach(function (k) { if (k.indexOf(prefixo + '_') === 0 && manter.indexOf(k) === -1) delete S.resp[k]; });
-    S.envioId = novoId();
-    S.etapa = etapa;
-    telaEtapa();
-  }
-
   // =============================== Início ===============================
   function iniciar() {
     switch (D.tela) {
@@ -738,7 +736,7 @@
    */
   function carregar() {
     if (!ACAO) { D = { tela: 'sem_acao' }; iniciar(); return; }
-    var chaveCache = 'appdf:dados:' + ACAO.toUpperCase() + ':' + FORM;
+    var chaveCache = 'appdf:dados3:' + ACAO.toUpperCase() + ':' + FORM;
     var copia = null;
     try { copia = JSON.parse(window.localStorage.getItem(chaveCache) || 'null'); } catch (e) { copia = null; }
     var usouCopia = !!(copia && copia.d && copia.d.tela && Date.now() - copia.t < 7 * 24 * 3600 * 1000);
