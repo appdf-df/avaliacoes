@@ -1,0 +1,5 @@
+# Código de acesso inicial do painel (não publicar)
+src/Segredo.gs
+# Credenciais locais do clasp (ficam na pasta do usuário, mas por garantia)
+.clasprc.json
+.DS_Store

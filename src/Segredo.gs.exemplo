@@ -1,0 +1,9 @@
+/**
+ * Segredo.gs — Código de acesso INICIAL do painel (só para instalação nova).
+ *
+ * Copie este arquivo para "Segredo.gs" e troque o valor. Ele não vai para o GitHub (.gitignore).
+ * Depois do primeiro acesso ao painel, o código fica guardado na propriedade do script
+ * CODIGO_PAINEL, e quem manda passa a ser o botão "Trocar código" do painel.
+ * Na instalação atual, o código já está na propriedade: este arquivo não é necessário.
+ */
+const CODIGO_PAINEL_INICIAL = 'troque-este-codigo';
